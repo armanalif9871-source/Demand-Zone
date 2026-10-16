@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dress Stock Manager</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f2f4f8;
+    margin: 0;
+    padding: 15px;
+}
+h1 {
+    background: #21184f;
+    color: white;
+    padding: 20px;
+    text-align: center;
+    border-radius: 10px;
+}
+.box {
+    background: white;
+    padding: 15px;
+    margin: 15px 0;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px #ddd;
+}
+input, select, button {
+    width: 100%;
+    padding: 12px;
+    margin: 6px 0;
+    box-sizing: border-box;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+}
+button {
+    background: #5b45d6;
+    color: white;
+    border: none;
+    font-weight: bold;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
+}
+th {
+    background: #21184f;
+    color: white;
+}
+.table-wrap {
+    overflow-x: auto;
+}
+.out {
+    color: red;
+    font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+
+<h1>👗 Dress Stock Manager</h1>
+
+<div class="box" id="login">
+    <h2>Admin / Staff Login</h2>
+
+    <select id="role">
+        <option value="admin">Admin</option>
+        <option value="staff">Staff</option>
+    </select>
+
+    <input type="password" id="password"
+           placeholder="পাসওয়ার্ড লিখুন">
+
+    <button onclick="login()">Login</button>
+
+    <p id="error" style="color:red"></p>
+
+    <small>
+        Admin Password: Admin123!<br>
+        Staff Password: Staff123!
+    </small>
+</div>
+
+<div id="dashboard" style="display:none">
+
+    <div class="box">
+        <h2>স্টকের হিসাব</h2>
+        <p>মোট ড্রেস: <b id="totalDress">0</b></p>
+        <p>বর্তমান স্টক: <b id="totalStock">0</b> পিস</p>
+        <p>মোট বিক্রি: <b id="totalSold">0</b> পিস</p>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <div class="box" id="adminPanel">
+        <h2>নতুন ড্রেস যোগ করুন</h2>
+
+        <input id="code" placeholder="ড্রেস কোড">
+
+        <input id="name" placeholder="ড্রেসের নাম">
+
+        <input id="qty" type="number"
+               min="1" placeholder="কত পিস স্টকে এসেছে">
+
+        <label>স্টকে ঢোকার তারিখ</label>
+        <input id="date" type="date">
+
+        <button onclick="addDress()">ড্রেস সেভ করুন</button>
+
+        <hr>
+
+        <h2>স্টক ও বিক্রির হিসাব</h2>
+
+        <select id="dressCode"></select>
+
+        <select id="type">
+            <option value="in">নতুন স্টক এসেছে</option>
+            <option value="sale">অনলাইনে বিক্রি হয়েছে</option>
+            <option value="remove">স্টক কমানো</option>
+        </select>
+
+        <input id="moveQty" type="number"
+               min="1" placeholder="কত পিস">
+
+        <label>তারিখ</label>
+        <input id="moveDate" type="date">
+
+        <button onclick="updateStock()">হিসাব সেভ করুন</button>
+    </div>
+
+    <div class="box">
+        <h2>ড্রেস স্টক তালিকা</h2>
+
+        <input id="search" placeholder="ড্রেস কোড দিয়ে খুঁজুন"
+               oninput="render()">
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>কোড</th>
+                        <th>নাম</th>
+                        <th>স্টকে ঢোকার তারিখ</th>
+                        <th>মোট ঢুকেছে</th>
+                        <th>মোট বিক্রি</th>
+                        <th>বর্তমান স্টক</th>
+                        <th>অবস্থা</th>
+                        <th>মুছুন</th>
+                    </tr>
+                </thead>
+                <tbody id="rows"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="box">
+        <h2>তারিখ অনুযায়ী বিক্রির হিসাব</h2>
+
+        <input type="date" id="reportDate"
+               onchange="render()">
+
+        <p id="report"></p>
+
+        <button onclick="downloadBackup()">
+            ডেটা ব্যাকআপ ডাউনলোড
+        </button>
+
+        <button onclick="downloadCSV()">
+            Excel-এর জন্য রিপোর্ট ডাউনলোড
+        </button>
+    </div>
+
+</div>
+
+<script>
+let dresses = [];
+let movements = [];
+let role = "";
+
+function loadData() {
+    try {
+        dresses = JSON.parse(
+            localStorage.getItem("dresses") || "[]"
+        );
+        movements = JSON.parse(
+            localStorage.getItem("movements") || "[]"
+        );
+    } catch (e) {
+        dresses = [];
+        movements = [];
+    }
+}
+
+function saveData() {
+    localStorage.setItem("dresses", JSON.stringify(dresses));
+    localStorage.setItem("movements", JSON.stringify(movements));
+}
+
+function login() {
+    let r = document.getElementById("role").value;
+    let p = document.getElementById("password").value;
+
+    if (r === "admin" && p === "Admin123!") {
+        role = "admin";
+    } else if (r === "staff" && p === "Staff123!") {
+        role = "staff";
+    } else {
+        document.getElementById("error").innerText =
+            "পাসওয়ার্ড ভুল হয়েছে!";
+        return;
+    }
+
+    loadData();
+
+    document.getElementById("login").style.display = "none";
+    document.getElementById("dashboard").style.display = "block";
+
+    document.getElementById("adminPanel").style.display =
+        role === "admin" ? "block" : "none";
+
+    render();
+}
+
+function logout() {
+    role = "";
+    document.getElementById("dashboard").style.display = "none";
+    document.getElementById("login").style.display = "block";
+    document.getElementById("password").value = "";
+}
+
+function addDress() {
+    if (role !== "admin") return;
+
+    let code = document.getElementById("code").value.trim();
+    let name = document.getElementById("name").value.trim();
+    let qty = Number(document.getElementById("qty").value);
+    let date = document.getElementById("date").value;
+
+    if (!code || !name || !Number.isInteger(qty) ||
+        qty < 1 || !date) {
+        alert("সব তথ্য সঠিকভাবে পূরণ করুন");
+        return;
+    }
+
+    if (dresses.some(d => d.code.toLowerCase() === code.toLowerCase())) {
+        alert("এই ড্রেস কোড আগে যোগ করা হয়েছে");
+        return;
+    }
+
+    dresses.push({
+        code: code,
+        name: name,
+        initialQty: qty,
+        date: date
+    });
+
+    saveData();
+    render();
+
+    document.getElementById("code").value = "";
+    document.getElementById("name").value = "";
+    document.getElementById("qty").value = "";
+
+    alert("ড্রেস যোগ হয়েছে");
+}
+
+function getTotals(d) {
+    let incoming = d.initialQty;
+    let sold = 0;
+    let removed = 0;
+
+    movements.filter(m => m.code === d.code).forEach(m => {
+        if (m.type === "in") incoming += m.qty;
+        if (m.type === "sale") sold += m.qty;
+        if (m.type === "remove") removed += m.qty;
+    });
+
+    return {
+        incoming: incoming,
+        sold: sold,
+        stock: incoming - sold - removed
+    };
+}
+
+function updateStock() {
+    if (role !== "admin") return;
+
+    let code = document.getElementById("dressCode").value;
+    let type = document.getElementById("type").value;
+    let qty = Number(document.getElementById("moveQty").value);
+    let date = document.getElementById("moveDate").value;
+
+    let d = dresses.find(x => x.code === code);
+
+    if (!d || !Number.isInteger(qty) || qty < 1 || !date) {
+        alert("সঠিক তথ্য দিন");
+        return;
+    }
+
+    let totals = getTotals(d);
+
+    if ((type === "sale" || type === "remove") &&
+        qty > totals.stock) {
+        alert("স্টকে এত পিস নেই");
+        return;
+    }
+
+    movements.push({
+        code: code,
+        type: type,
+        qty: qty,
+        date: date
+    });
+
+    saveData();
+    render();
+
+    document.getElementById("moveQty").value = "";
+
+    alert("হিসাব সেভ হয়েছে");
+}
+
+function render() {
+    let rows = document.getElementById("rows");
+    let search = (
+        document.getElementById("search").value || ""
+    ).toLowerCase();
+
+    rows.innerHTML = "";
+
+    let totalStock = 0;
+    let totalSold = 0;
+
+    dresses.forEach((d, index) => {
+        let t = getTotals(d);
+
+        totalStock += t.stock;
+        totalSold += t.sold;
+
+        if (!(d.code + " " + d.name).toLowerCase().includes(search)) {
+            return;
+        }
+
+        let tr = document.createElement("tr");
+
+        let values = [
+            d.code,
+            d.name,
+            d.date,
+            t.incoming,
+            t.sold,
+            t.stock,
+            t.stock <= 0 ? "Stock Out" : "In Stock"
+        ];
+
+        values.forEach((value, i) => {
+            let td = document.createElement("td");
+            td.textContent = value;
+
+            if (i === 6 && t.stock <= 0) {
+                td.className = "out";
+            }
+
+            tr.appendChild(td);
+        });
+
+        let action = document.createElement("td");
+
+        if (role === "admin") {
+            let btn = document.createElement("button");
+            btn.textContent = "মুছুন";
+
+            btn.onclick = function() {
+                if (confirm("এই ড্রেসের সব হিসাব মুছবেন?")) {
+                    dresses = dresses.filter(x => x.code !== d.code);
+                    movements = movements.filter(x => x.code !== d.code);
+                    saveData();
+                    render();
+                }
+            };
+
+            action.appendChild(btn);
+        } else {
+            action.textContent = "শুধু দেখা";
+        }
+
+        tr.appendChild(action);
+        rows.appendChild(tr);
+    });
+
+    document.getElementById("totalDress").textContent = dresses.length;
+    document.getElementById("totalStock").textContent = totalStock;
+    document.getElementById("totalSold").textContent = totalSold;
+
+    let select = document.getElementById("dressCode");
+    let oldValue = select.value;
+
+    select.innerHTML = "";
+
+    dresses.forEach(d => {
+        let option = document.createElement("option");
+        option.value = d.code;
+        option.textContent = d.code + " - " + d.name;
+        select.appendChild(option);
+    });
+
+    if (dresses.some(d => d.code === oldValue)) {
+        select.value = oldValue;
+    }
+
+    let reportDate = document.getElementById("reportDate").value;
+    let dailySales = movements
+        .filter(m => m.date === reportDate && m.type === "sale")
+        .reduce((sum, m) => sum + m.qty, 0);
+
+    let dailyIn = movements
+        .filter(m => m.date === reportDate && m.type === "in")
+        .reduce((sum, m) => sum + m.qty, 0);
+
+    document.getElementById("report").textContent =
+        reportDate
+        ? reportDate + " | স্টক এসেছে: " + dailyIn +
+          " পিস | বিক্রি: " + dailySales + " পিস"
+        : "তারিখ নির্বাচন করুন";
+}
+
+function downloadBackup() {
+    if (role !== "admin") return;
+
+    let data = JSON.stringify({
+        dresses: dresses,
+        movements: movements
+    }, null, 2);
+
+    downloadFile("dress-stock-backup.json", data, "application/json");
+}
+
+function downloadCSV() {
+    if (role !== "admin") return;
+
+    let lines = [
+        ["Code", "Name", "Stock Date", "Total In", "Total Sold", "Current Stock"]
+    ];
+
+    dresses.forEach(d => {
+        let t = getTotals(d);
+
+        lines.push([
+            d.code, d.name, d.date,
+            t.incoming, t.sold, t.stock
+        ]);
+    });
+
+    let csv = "\uFEFF" + lines.map(row =>
+        row.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(",")
+    ).join("\r\n");
+
+    downloadFile("dress-stock-report.csv", csv, "text/csv;charset=utf-8");
+}
+
+function downloadFile(filename, content, type) {
+    let blob = new Blob([content], {type: type});
+    let url = URL.createObjectURL(blob);
+    let a = document.createElement("a");
+
+    a.href = url;
+    a.download = filename;
+    a.click();
+
+    URL.revokeObjectURL(url);
+}
+
+document.getElementById("date").value =
+    new Date().toLocaleDateString("en-CA");
+
+document.getElementById("moveDate").value =
+    new Date().toLocaleDateString("en-CA");
+
+document.getElementById("reportDate").value =
+    new Date().toLocaleDateString("en-CA");
+</script>
+
+</body>
+</html>
